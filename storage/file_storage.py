@@ -1,6 +1,8 @@
 import os
 import json
 import pandas as pd  # For saving tables as CSV
+from io import BytesIO
+from PIL import Image as PILImage  # For handling PPTX images
 
 class FileStorage:
     def __init__(self, output_dir: str):
@@ -22,27 +24,47 @@ class FileStorage:
             raise ValueError("Unsupported data type. Use 'text', 'image', 'url', or 'table'.")
 
     def save_text(self, data, filename: str):
+        """Save text data as a .txt file."""
         txt_filename = os.path.splitext(filename)[0] + ".txt"
         output_path = os.path.join(self.output_dir, txt_filename)
         with open(output_path, 'w') as f:
             f.write(data)
 
     def save_images(self, images, filename: str):
+        """Save image data to image files and metadata."""
         images_dir = os.path.join(self.output_dir, "images")
         if not os.path.exists(images_dir):
             os.makedirs(images_dir)
 
         metadata = []
-        for idx, image_info in enumerate(images):
-            image_filename = f"image_{idx + 1}.{image_info['ext']}"
+        for idx, image in enumerate(images):
+            # Check if the image is a PIL Image object (PPTX case)
+            if isinstance(image, PILImage.Image):  
+                # Convert the image to bytes (PNG format)
+                image_bytes = BytesIO()
+                image.save(image_bytes, format='PNG')  # Save as PNG
+                image_bytes = image_bytes.getvalue()
+                image_filename = f"image_{idx + 1}.png"
+                image_ext = 'png'
+            # Otherwise, assume it's a dictionary (PDF/DOCX case)
+            elif isinstance(image, dict):
+                # Check if it's a dictionary and has the necessary keys
+                image_filename = f"image_{idx + 1}.{image.get('ext', 'jpg')}"
+                image_bytes = image.get('image_data', b"")
+                image_ext = image.get('ext', 'jpg')
+            else:
+                # If the image is neither a PIL Image nor a dictionary, skip it
+                continue
+
+            # Save the image data to file
             image_path = os.path.join(images_dir, image_filename)
             with open(image_path, "wb") as img_file:
-                img_file.write(image_info["image_data"])
+                img_file.write(image_bytes)
 
             metadata.append({
                 "file_name": image_filename,
-                "page_number": image_info["page"],
-                "dimensions": image_info["dimensions"]
+                "page_number": image.get("page", "N/A"),
+                "dimensions": image.get("dimensions", "N/A")
             })
 
         metadata_file = os.path.join(images_dir, 'metadata.json')
@@ -50,6 +72,7 @@ class FileStorage:
             json.dump(metadata, f, indent=4)
 
     def save_urls(self, urls, filename: str):
+        """Save URLs to a .txt file and metadata to a .json file."""
         urls_dir = os.path.join(self.output_dir, "urls")
         if not os.path.exists(urls_dir):
             os.makedirs(urls_dir)
@@ -76,7 +99,15 @@ class FileStorage:
         if not os.path.exists(tables_dir):
             os.makedirs(tables_dir)
 
-        for idx, table_df in enumerate(tables):
+        for idx, table in enumerate(tables):
             csv_filename = f"table_{idx + 1}.csv"
             csv_path = os.path.join(tables_dir, csv_filename)
-            table_df.to_csv(csv_path, index=False)
+            
+            # Check if the table is a DataFrame (from PDF extraction)
+            if isinstance(table, pd.DataFrame):
+                table.to_csv(csv_path, index=False)
+            # Otherwise, treat it as a list (from DOCX or PPTX extraction)
+            elif isinstance(table, list):
+                with open(csv_path, 'w', newline='') as f:
+                    for row in table:
+                        f.write(",".join(row) + "\n")
