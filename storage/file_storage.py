@@ -1,3 +1,4 @@
+"""
 import os
 import json
 import pandas as pd  # For saving tables as CSV
@@ -11,7 +12,7 @@ class FileStorage:
             os.makedirs(output_dir)
 
     def save(self, data, filename: str, data_type: str):
-        """Save data based on type: 'text', 'image', 'url', or 'table'."""
+        Save data based on type: 'text', 'image', 'url', or 'table'.
         if data_type == 'text':
             self.save_text(data, filename)
         elif data_type == 'image':
@@ -24,14 +25,14 @@ class FileStorage:
             raise ValueError("Unsupported data type. Use 'text', 'image', 'url', or 'table'.")
 
     def save_text(self, data, filename: str):
-        """Save text data as a .txt file."""
+        Save text data as a .txt file.
         txt_filename = os.path.splitext(filename)[0] + ".txt"
         output_path = os.path.join(self.output_dir, txt_filename)
         with open(output_path, 'w') as f:
             f.write(data)
 
     def save_images(self, images, filename: str):
-        """Save image data to image files and metadata."""
+        Save image data to image files and metadata.
         images_dir = os.path.join(self.output_dir, "images")
         if not os.path.exists(images_dir):
             os.makedirs(images_dir)
@@ -72,7 +73,7 @@ class FileStorage:
             json.dump(metadata, f, indent=4)
 
     def save_urls(self, urls, filename: str):
-        """Save URLs to a .txt file and metadata to a .json file."""
+        Save URLs to a .txt file and metadata to a .json file.
         urls_dir = os.path.join(self.output_dir, "urls")
         if not os.path.exists(urls_dir):
             os.makedirs(urls_dir)
@@ -94,7 +95,7 @@ class FileStorage:
             json.dump(metadata, f, indent=4)
 
     def save_tables(self, tables, filename: str):
-        """Save extracted tables as CSV files."""
+        Save extracted tables as CSV files.
         tables_dir = os.path.join(self.output_dir, "tables")
         if not os.path.exists(tables_dir):
             os.makedirs(tables_dir)
@@ -111,3 +112,90 @@ class FileStorage:
                 with open(csv_path, 'w', newline='') as f:
                     for row in table:
                         f.write(",".join(row) + "\n")
+"""
+
+import os
+import json
+from PIL import Image as PILImage  # For handling image data
+from io import BytesIO
+import pandas as pd  # For saving tables as CSV (if needed)
+
+class FileStorage:
+    def __init__(self, output_dir: str):
+        self.output_dir = output_dir
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+
+    def save(self, data, filename: str, data_type: str):
+        """Save data based on type: 'text', 'image', 'url', or 'table'."""
+        if data_type == 'text':
+            self.save_text(data, filename)
+        elif data_type == 'image':
+            self.save_images(data, filename)
+        elif data_type == 'url':
+            self.save_urls(data, filename)
+        elif data_type == 'table':
+            self.save_tables(data, filename)
+        else:
+            raise ValueError("Unsupported data type. Use 'text', 'image', 'url', or 'table'.")
+
+    def save_text(self, data, filename: str):
+        """Save text data as a .txt file."""
+        text_dir = os.path.join(self.output_dir, "text")
+        if not os.path.exists(text_dir):
+            os.makedirs(text_dir)
+        
+        txt_filename = os.path.splitext(filename)[0] + ".txt"
+        output_path = os.path.join(text_dir, txt_filename)
+        with open(output_path, 'w') as f:
+            f.write(data)
+
+    def save_images(self, images, filename: str):
+        """Save image data to image files."""
+        images_dir = os.path.join(self.output_dir, "images")
+        if not os.path.exists(images_dir):
+            os.makedirs(images_dir)
+
+        for idx, image in enumerate(images):
+            if isinstance(image, PILImage.Image):
+                image_bytes = BytesIO()
+                image.save(image_bytes, format='PNG')  # Save in PNG format
+                image_bytes = image_bytes.getvalue()
+                image_filename = f"image_{idx + 1}.png"
+            else:
+                continue
+
+            image_path = os.path.join(images_dir, image_filename)
+            with open(image_path, "wb") as img_file:
+                img_file.write(image_bytes)
+
+    def save_urls(self, urls, filename: str):
+        """Save URLs to a separate .txt file."""
+        urls_dir = os.path.join(self.output_dir, "urls")
+        if not os.path.exists(urls_dir):
+            os.makedirs(urls_dir)
+
+        url_filename = os.path.splitext(filename)[0] + "_urls.txt"
+        with open(os.path.join(urls_dir, url_filename), "w") as url_file:
+            for url_info in urls:
+                url_file.write(f"{url_info['text']}: {url_info['url']}\n")
+
+    def save_tables(self, tables, filename: str):
+        """Save table data as .csv files."""
+        tables_dir = os.path.join(self.output_dir, "tables")
+        if not os.path.exists(tables_dir):
+            os.makedirs(tables_dir)
+
+        for idx, table in enumerate(tables):
+            table_filename = f"table_{idx + 1}.csv"
+            table_path = os.path.join(tables_dir, table_filename)
+
+            # Check if the table is a DataFrame, if not convert it to one
+            if isinstance(table, pd.DataFrame):
+                # Save the table as CSV if it's already a DataFrame
+                table.to_csv(table_path, index=False)
+            else:
+                # Convert the list (or other object) to a DataFrame and then save as CSV
+                df = pd.DataFrame(table)  # Assuming it's a list of lists
+                df.to_csv(table_path, index=False)
+
